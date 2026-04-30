@@ -5,7 +5,7 @@ export interface EthNetwork {
   chainIdHex: string;
   name: string;
   shortName: string;
-  rpcUrl: string;
+  rpcUrls: string[];
   explorer: string;
   currency: { name: string; symbol: string; decimals: number };
   /** Address of a deployed HiddenPKWallet on this chain, if any. */
@@ -17,21 +17,15 @@ export const NETWORKS: Record<string, EthNetwork> = {
     chainId: 11155111,
     chainIdHex: "0xaa36a7",
     name: "Sepolia",
-    shortName: "sepolia",
-    rpcUrl: "https://rpc.sepolia.org",
+    shortName: "Sepolia",
+    rpcUrls: [
+      "https://ethereum-sepolia-rpc.publicnode.com",
+      "https://sepolia.drpc.org",
+      "https://rpc2.sepolia.org",
+    ],
     explorer: "https://sepolia.etherscan.io",
     currency: { name: "Sepolia Ether", symbol: "ETH", decimals: 18 },
     hiddenPkWallet: import.meta.env.VITE_HIDDEN_PK_WALLET_SEPOLIA,
-  },
-  hardhat: {
-    chainId: 31337,
-    chainIdHex: "0x7a69",
-    name: "Hardhat Local",
-    shortName: "hardhat",
-    rpcUrl: "http://127.0.0.1:8545",
-    explorer: "",
-    currency: { name: "Ether", symbol: "ETH", decimals: 18 },
-    hiddenPkWallet: import.meta.env.VITE_HIDDEN_PK_WALLET_HARDHAT,
   },
 };
 

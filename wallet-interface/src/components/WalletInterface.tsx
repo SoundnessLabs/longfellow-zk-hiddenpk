@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import toast, { Toaster } from "react-hot-toast";
 import {
-  Wallet, ChevronDown, Send, LogOut, Copy, Shield, ShieldOff, RefreshCw,
+  ChevronDown, Send, LogOut, Copy, Shield, ShieldOff, RefreshCw,
 } from "lucide-react";
 import { ethers } from "ethers";
 
@@ -271,7 +271,7 @@ export function WalletInterface() {
           marginBottom: 22,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-            <Wallet size={20} color="var(--gold)" />
+            <img src="/logo.jpg" alt="Soundness Labs" style={{ height: 24, width: "auto" }} />
             <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: "-0.3px" }}>
               Hidden-PK Wallet
             </span>
@@ -290,7 +290,7 @@ export function WalletInterface() {
           {!account ? (
             <button className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }}
               onClick={handleConnect}>
-              <Wallet size={16} /> Connect MetaMask
+              <img src="/metamask.png" alt="" style={{ height: 16, width: "auto" }} /> Connect MetaMask
             </button>
           ) : (
             <>
@@ -400,6 +400,17 @@ export function WalletInterface() {
           />
         )}
       </div>
+
+      <footer style={{
+        marginTop: 32, textAlign: "center", fontSize: 11, color: "var(--dim)",
+      }}>
+        © {new Date().getFullYear()}{" "}
+        <a href="https://soundness.xyz" target="_blank" rel="noopener noreferrer"
+          style={{ color: "var(--dim)", textDecoration: "underline", textUnderlineOffset: 3 }}>
+          Soundness Labs
+        </a>
+        . All rights reserved.
+      </footer>
     </div>
   );
 }

@@ -46,7 +46,7 @@ export async function switchChain(provider: Eip1193Provider, net: EthNetwork): P
         params: [{
           chainId: net.chainIdHex,
           chainName: net.name,
-          rpcUrls: [net.rpcUrl],
+          rpcUrls: net.rpcUrls,
           nativeCurrency: net.currency,
           blockExplorerUrls: net.explorer ? [net.explorer] : undefined,
         }],
