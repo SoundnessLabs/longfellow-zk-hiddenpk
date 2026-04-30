@@ -6,9 +6,9 @@
 
 ## TL;DR
 
-- Any Ethereum EOA that has transacted has its secp256k1 public key permanently on-chain and is quantum-vulnerable today.
+- Any Ethereum EOA that has transacted has its secp256k1 public key permanently onchain and is quantum-vulnerable today.
 - A single EIP-7702 transaction retrofits the existing EOA to post-quantum security with no address change, no asset migration, and no consensus modification.
-- The EOA installs a `GatedWallet` contract that accepts only ZK proofs of ECDSA knowledge under a **hidden public key**. That key never appears on-chain at any point.
+- The EOA installs a `GatedWallet` contract that accepts only ZK proofs of ECDSA knowledge under a **hidden public key**. That key never appears onchain at any point.
 - A working C++ implementation over secp256k1 using Longfellow-ZK (Ligero, hash-only, post-quantum sound) benchmarks at **87 ms prove / 65 ms verify / 226 KB proof** on Apple M1. An independent Rust port is available at [github.com/abetterinternet/zk-cred-longfellow](https://github.com/abetterinternet/zk-cred-longfellow).
 - We identify a **designated-prover ECDSA** optimization: because the prover is also the signer, the verification path collapses from two variable-base MSMs to two fixed-base ones, with an estimated 3-5x constraint reduction.
 - This work extends [quantum-proof keypairs with ECDSA-ZK (ethresear.ch, 2022)](https://ethresear.ch/t/quantum-proof-keypairs-with-ecdsa-zk/14901) and fills in the delegation and verification flow that was left open there.
@@ -40,7 +40,7 @@ The core problem is the infrastructure layer beneath the wallet software. Most i
 
 Beyond the HSM and MPC layer, a PQ migration requires new address schemes, consensus-level changes, updated wallet interfaces across every client, and new calldata economics for larger PQ signatures (ML-DSA signatures are 2.4-3.3 KB versus 65 bytes for ECDSA).
 
-The hidden-PK construction described here does not replace ECDSA. It wraps it. The HSM or MPC system continues to run ECDSA internally. The ZK proof layer sits above that, in wallet software, and the on-chain verifier only sees a proof that the ECDSA signing happened correctly under a committed key. Nothing below the wallet software changes. This is the fastest path to quantum safety for MPC and HSM wallets in production today.
+The hidden-PK construction described here does not replace ECDSA. It wraps it. The HSM or MPC system continues to run ECDSA internally. The ZK proof layer sits above that, in wallet software, and the onchain verifier only sees a proof that the ECDSA signing happened correctly under a committed key. Nothing below the wallet software changes. This is the fastest path to quantum safety for MPC and HSM wallets in production today.
 
 ---
 
@@ -48,7 +48,7 @@ The hidden-PK construction described here does not replace ECDSA. It wraps it. T
 
 The 2022 ethresear.ch post [2] identified the right goal: prove ECDSA signature knowledge without revealing the public key. Two things were left open:
 
-1. **The delegation flow.** How does the proof connect to the existing EOA's assets, and what is the on-chain gating mechanism?
+1. **The delegation flow.** How does the proof connect to the existing EOA's assets, and what is the onchain gating mechanism?
 2. **The proof system choice.** What ZK backend is usable? Groth16 and KZG-PLONK are not post-quantum sound.
 
 PSE's [zkID project](https://github.com/privacy-ethereum/zkID) is solving the same problem from the identity angle: ZK proofs over ECDSA credentials for privacy-preserving identity on Ethereum. Their circuit work demonstrates that ECDSA-ZK is operationally practical today. The ZK identity stack that zkID has built, including verifier contracts, mobile-side proving libraries, and standardized proof formats, is directly reusable for the hidden-PK wallet construction described here. This is why the proposal is deployable now. A wallet vendor integrating zkID's ECDSA-ZK circuits gets both identity and quantum-safe transaction authorization from the same codebase.
@@ -206,7 +206,7 @@ This replaces two variable-base MSMs with **two fixed-base scalar multiplication
 | Constraint count (est.) | ~100K | ~20-35K |
 | Proof size | 226 KB | ~50-80 KB |
 | Prove time | ~87 ms | ~20-30 ms |
-| On-chain gas | ~3 M | ~800 K |
+| onchain gas | ~3 M | ~800 K |
 
 ### 7.3 Why ECDSA cannot be dropped
 
@@ -252,7 +252,7 @@ Measured on Apple M1, single core, release build, `kLigeroRate = 7`, `kLigeroNre
 
 Proof size breakdown: 32 B Merkle root, 17.6 KB sumcheck, 213.9 KB RS column openings (132 columns at ~1.6 KB each). Column openings dominate. On mobile hardware (Snapdragon 8 Gen 3, Apple A17) expect roughly 2-3x proving overhead, still well under one second.
 
-### On-chain gas
+### onchain gas
 
 | Item | Gas |
 |---|---|
