@@ -4,3 +4,5 @@ clang-build-release/
 *.DS_Store
 build/
 wallet-interface/
+proof.json
+contracts/
