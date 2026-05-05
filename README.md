@@ -135,6 +135,65 @@ All commands run from the repo root.
 
 ---
 
+## Standalone Prover
+
+`hidden_pk_prove` is a CLI that takes a raw secp256k1 ECDSA witness and produces a self-contained JSON proof.
+
+### Build
+
+```bash
+CXX=clang++ cmake -DCMAKE_BUILD_TYPE=Release -S lib -B build
+make -C build hidden_pk_prove -j$(nproc)
+```
+
+### Run
+
+```bash
+./build/circuits/hidden_pk/hidden_pk_prove \
+  --pkX 0x8318535b54105d4a7aae60c08fc45f9687181b4fdfc625bd1a753fa7397fed75 \
+  --pkY 0x3547f11ca8696646f2f3acb08e31016afac23e630c5d11f59f61fef57b0d2aa5 \
+  --r   0xd71d651943f3f678a2571bab862ef7e55cf6b893b951547dff3ae8f16b5cf2ce \
+  --s   0x5e4e4a914bbcc682c21bd2158736bb37cb99eb83e2fde5cda2d7f83769e10ca2 \
+  --msg 0x3c173364254c586f7c89f2fc2b6fe6aab4699dbd3a71bfd9c5a3313bd73fb577 \
+  > proof.json
+```
+
+The values above use Hardhat account #0 (private key `0xac0974...2ff80`) signing a known message. Expected `ethAddr` in the output: `0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266`.
+
+### Output format
+
+```json
+{
+  "proofHex": "0x...",
+  "proofSizeBytes": 292163,
+  "proveMs": 150,
+  "verifyMs": 87,
+  "ethAddr": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+}
+```
+
+Numbers above are from Apple M1 single-core with default parameters (`--rate 7 --nreq 132`). `proveMs` and `verifyMs` measure only the ZK work; circuit compilation (~370ms one-time) is not included.
+
+### Optional parameters
+
+| Flag | Default | Description |
+|---|---|---|
+| `--rate N` | `7` | Reed-Solomon rate. Higher rate = longer RS codewords = more commit work. Only reduces proof size if nreq is also reduced. |
+| `--nreq N` | `132` | Number of Ligero random queries. This is the main knob for the size/security tradeoff. |
+| `--version N` | `7` | Transcript version tag |
+
+### Parameter comparison (Apple M1, single core)
+
+| rate | nreq | prove | verify | size | security |
+|------|------|-------|--------|------|----------|
+| 7 | 64 | 135ms | 76ms | 199KB | ~53 bits (testnet/demo only) |
+| 7 | 132 | 150ms | 87ms | 285KB | ~109 bits (default, production) |
+| 12 | 132 | 171ms | 106ms | 286KB | ~109 bits (slower, same size as rate=7) |
+
+At this circuit size (8,110 inputs), rate=12 does not reduce proof size compared to rate=7 at equal nreq — the RS commit overhead increases while Merkle path count stays fixed. `nreq` is the dominant knob.
+
+---
+
 ## Benchmarks
 
 Measured on Apple M1 (single core, Release build). Circuit parameters: `kLigeroRate=7`, `kLigeroNreq=132`.
@@ -147,12 +206,12 @@ Measured on Apple M1 (single core, Release build). Circuit parameters: `kLigeroR
 | Circuit compilation (one-time) | ~370ms |
 | RS commitment | ~58ms |
 | Sumcheck | ~90ms |
-| **Total prove time** | **~155ms** |
-| **Verification time** | **~93ms** |
+| **Total prove time** | **~150ms** |
+| **Verification time** | **~87ms** |
 
 Circuit compilation is a one-time cost per session. On mobile hardware expect 2–4× the proving time.
 
-The previous SHA-256 version produced 258 public input bits (a custom 32-byte hash) and required an onchain `sha256(pk) == pkHash` check. The Keccak-256 version produces 162 public input bits — a standard 20-byte Ethereum address — and eliminates that onchain step entirely. The proving time increase (~155ms vs ~87ms) is the cost of replacing the two-block SHA-256 circuit with the Keccak-f[1600] permutation circuit.
+The previous SHA-256 version produced 258 public input bits (a custom 32-byte hash) and required an onchain `sha256(pk) == pkHash` check. The Keccak-256 version produces 162 public input bits — a standard 20-byte Ethereum address — and eliminates that onchain step entirely. The proving time increase (~150ms vs ~87ms) is the cost of replacing the two-block SHA-256 circuit with the Keccak-f[1600] permutation circuit.
 
 ### Onchain cost estimate (mainnet)
 
@@ -174,10 +233,11 @@ Files added to the Longfellow-ZK base:
 
 ```
 lib/circuits/hidden_pk/
-├── CMakeLists.txt          Build target for hidden_pk_test
+├── CMakeLists.txt          Build targets for hidden_pk_test and hidden_pk_prove
 ├── hidden_pk_circuit.h     Circuit: ECDSA verify + Keccak-256 Ethereum address
 ├── hidden_pk_witness.h     Witness computation from (pk, e, r, s)
-└── hidden_pk_test.cc       Tests and Google Benchmark
+├── hidden_pk_test.cc       Tests and Google Benchmark
+└── hidden_pk_prove.cc      Standalone proving CLI (outputs JSON)
 
 lib/circuits/tests/sha3/    (extended from upstream)
 ├── sha3_circuit.h          Added assert_keccak256 (0x01 padding)
