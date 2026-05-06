@@ -31,6 +31,7 @@ The public key and signature never appear onchain. Hash preimage resistance surv
 - [Build](#build)
 - [Running the Tests](#running-the-tests)
 - [Benchmarks](#benchmarks)
+- [Smart Contract](#smart-contract)
 - [Repository Structure](#repository-structure)
 - [Acknowledgements](#acknowledgements)
 - [About Soundness Labs](#about-soundness-labs)
@@ -166,31 +167,50 @@ The values above use Hardhat account #0 (private key `0xac0974...2ff80`) signing
 {
   "proofHex": "0x...",
   "proofSizeBytes": 292163,
-  "proveMs": 150,
-  "verifyMs": 87,
+  "proveMs": 144,
+  "verifyMs": 86,
   "ethAddr": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
 }
 ```
 
-Numbers above are from Apple M1 single-core with default parameters (`--rate 7 --nreq 132`). `proveMs` and `verifyMs` measure only the ZK work; circuit compilation (~370ms one-time) is not included.
+Numbers above are from Apple M1 single-core with default parameters (`--rate 7 --nreq 132`). `proveMs` and `verifyMs` measure only the ZK work; circuit compilation (~370ms one-time per process) is not included. The `time` command will show ~600ms wall-clock because it includes that compilation.
 
 ### Optional parameters
 
 | Flag | Default | Description |
 |---|---|---|
 | `--rate N` | `7` | Reed-Solomon rate. Higher rate = longer RS codewords = more commit work. Only reduces proof size if nreq is also reduced. |
-| `--nreq N` | `132` | Number of Ligero random queries. This is the main knob for the size/security tradeoff. |
+| `--nreq N` | `132` | Number of Ligero random queries. Main knob for size/security trade-off. See "Choosing rate and nreq" below. |
 | `--version N` | `7` | Transcript version tag |
 
-### Parameter comparison (Apple M1, single core)
+### Choosing rate and nreq
+
+In Ligero's unique decoding regime, the soundness error per opened column is bounded by
+
+$$\varepsilon_{\text{query}} \approx \frac{\text{rate}+1}{2 \cdot \text{rate}}$$
+
+so the security level in bits after `nreq` independent queries is
+
+$$\lambda \approx n_{\text{req}} \cdot \log_2 \frac{2 \cdot \text{rate}}{\text{rate}+1}$$
+
+Solve for the minimum `nreq` that hits a target security level $\lambda$:
+
+$$n_{\text{req}} = \left\lceil \frac{\lambda}{\log_2 \frac{2 \cdot \text{rate}}{\text{rate}+1}} \right\rceil$$
+
+This matches the analysis in the [Longfellow security review (Section S6, Dec 2025)](https://google.github.io/longfellow-zk/reviews/Longfellow_security_2025_12_15.pdf). The trade-off: increasing rate gives you better soundness per query (fewer queries needed) but a longer Reed-Solomon codeword, which means a slower commit phase and a slightly larger fixed proof overhead.
+
+### Parameter comparison (Apple M1, single core, secp256k1 base field)
 
 | rate | nreq | prove | verify | size | security |
 |------|------|-------|--------|------|----------|
-| 7 | 64 | 135ms | 76ms | 199KB | ~53 bits (testnet/demo only) |
-| 7 | 132 | 150ms | 87ms | 285KB | ~109 bits (default, production) |
-| 12 | 132 | 171ms | 106ms | 286KB | ~109 bits (slower, same size as rate=7) |
+| 7 | 132 | 144ms | 86ms | 285KB | ~109 bits (current default) |
+| 12 | 124 | 164ms | 103ms | 274KB | ~110 bits |
+| 12 | 113 | 167ms | 102ms | 263KB | ~100 bits |
+| 12 | 100 | 170ms | 101ms | 245KB | ~88 bits |
 
-At this circuit size (8,110 inputs), rate=12 does not reduce proof size compared to rate=7 at equal nreq — the RS commit overhead increases while Merkle path count stays fixed. `nreq` is the dominant knob.
+Going from `rate=7, nreq=132` to `rate=12, nreq=124` keeps the same security level (~110 bits) and shaves ~11KB off the proof. At `rate=12, nreq=113` you get ~100-bit security at 263KB. The savings are real but modest at this circuit size: the longer codeword at rate=12 increases per-query Merkle path depth by ~1 hash, partially eating the benefit of needing fewer queries.
+
+For very small proofs at lower security (e.g. ~88 bits, comparable to the upstream mdoc circuit's `rate=4, nreq=128`), `rate=12, nreq=100` gives 245KB.
 
 ---
 
@@ -206,12 +226,12 @@ Measured on Apple M1 (single core, Release build). Circuit parameters: `kLigeroR
 | Circuit compilation (one-time) | ~370ms |
 | RS commitment | ~58ms |
 | Sumcheck | ~90ms |
-| **Total prove time** | **~150ms** |
-| **Verification time** | **~87ms** |
+| **Total prove time** | **~144ms** |
+| **Verification time** | **~86ms** |
 
 Circuit compilation is a one-time cost per session. On mobile hardware expect 2–4× the proving time.
 
-The previous SHA-256 version produced 258 public input bits (a custom 32-byte hash) and required an onchain `sha256(pk) == pkHash` check. The Keccak-256 version produces 162 public input bits — a standard 20-byte Ethereum address — and eliminates that onchain step entirely. The proving time increase (~150ms vs ~87ms) is the cost of replacing the two-block SHA-256 circuit with the Keccak-f[1600] permutation circuit.
+The previous SHA-256 version produced 258 public input bits (a custom 32-byte hash) and required an onchain `sha256(pk) == pkHash` check. The Keccak-256 version produces 162 public input bits — a standard 20-byte Ethereum address — and eliminates that onchain step entirely. The proving time increase (~144ms vs ~87ms) is the cost of replacing the two-block SHA-256 circuit with the Keccak-f[1600] permutation circuit.
 
 ### Onchain cost estimate (mainnet)
 
@@ -224,6 +244,20 @@ The verifier is hash-only — no pairings, no elliptic curve ops. Gas breaks dow
 | Merkle path verification (132 paths) | ~330K |
 | Linear combination over public inputs | ~50K |
 | **Total** | **~3.4M gas** |
+
+---
+
+## Smart Contract
+
+The wallet side lives in [`contracts/`](./contracts/). It's a standard Foundry project with three Solidity files:
+
+- **`HiddenPKWallet.sol`** — the wallet itself. Stores an `owner` (the 20-byte Ethereum address) and an `IHiddenPKVerifier`. Exposes `execute(to, value, data, proof)` which binds (chainId, walletAddr, nonce, to, value, data) into a digest, asks the verifier to validate the proof against `(owner, digest)`, increments the nonce, then performs the call. Replay-safe across chains and per-wallet.
+- **`IHiddenPKVerifier.sol`** — the stable verifier interface: `verify(address ethAddr, bytes32 msgHash, bytes calldata proof) returns (bool)`.
+- **`MockHiddenPKVerifier.sol`** — a placeholder that returns `true` for any non-empty proof. **Not secure.** It exists so the wallet can be deployed end-to-end on testnet while the real on-chain Ligero verifier is being written. The file contains a long comment comparing Ligero to WHIR ([sol-whir](https://github.com/privacy-ethereum/sol-whir)) and listing what can be reused vs. what has to be written from scratch.
+
+The on-chain verifier is the main piece still missing. Estimated cost is ~3.4M gas for the verification logic plus ~3M for calldata (see the [Onchain cost estimate](#onchain-cost-estimate-mainnet) table above).
+
+For full deploy instructions, the reuse breakdown vs. sol-whir, and the path from mock to real verifier, see [contracts/README.md](./contracts/README.md).
 
 ---
 
@@ -244,6 +278,15 @@ lib/circuits/tests/sha3/    (extended from upstream)
 ├── sha3_reference.h/.cc    Added keccak256Hash reference implementation
 ├── sha3_witness.h/.cc      Added compute_witness_keccak256
 └── sha3_reference_test.cc  Added Keccak-256 known-vector + Ethereum address tests
+
+contracts/                  Foundry project — wallet + verifier interface
+├── README.md               Deploy guide, verifier reuse notes
+├── src/
+│   ├── HiddenPKWallet.sol      Wallet: nonce, replay safety, execute()
+│   ├── IHiddenPKVerifier.sol   Verifier interface
+│   └── MockHiddenPKVerifier.sol  Placeholder (always true) for testnet plumbing
+├── script/Deploy.s.sol     Sepolia deployment script
+└── test/HiddenPKWallet.t.sol  Foundry tests against the mock
 ```
 
 ---
